@@ -25,22 +25,25 @@ jobs:
         run: |
           python3 - << 'EOF'
           import json, subprocess, os, sys
+          from datetime import datetime
 
           if not os.path.exists('pattern.json'):
               sys.exit("ERROR: pattern.json not found in repo root")
 
-          try:
-              with open('pattern.json') as f:
-                  data = json.load(f)
-          except Exception as e:
-              sys.exit(f"ERROR: Failed to parse JSON: {e}")
+          with open('pattern.json') as f:
+              data = json.load(f)
 
           for entry in data:
-              date = entry.get("date")
-              count = entry.get("count", 0)
-              if not date:
+              # Extract date and intensity
+              date_str = entry.get("date")
+              intensity = entry.get("intensity", 0)
+              if not date_str or intensity == 0:
                   continue
-              for i in range(count):
+
+              # Convert ISO date to YYYY-MM-DD
+              date = datetime.fromisoformat(date_str.replace("Z","")).strftime("%Y-%m-%d")
+
+              for i in range(intensity):
                   subprocess.run(["bash", "-c", f"echo '{date}' >> log.txt"])
                   subprocess.run(["git", "add", "."])
                   subprocess.run(["git", "commit", "--date", f"{date} 12:00:00", "-m", f"Commit on {date}"])

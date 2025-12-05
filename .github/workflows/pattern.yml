@@ -20,18 +20,20 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests
 
-      - name: Run GitGenix script
+      - name: Run GitGenix contribution generator
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python - <<'EOF'
           import json
           import re
+          import subprocess
           from pathlib import Path
+          from datetime import datetime
 
           def fix_json(raw_text):
-              """Automatically fix common JSON issues and parse stringified objects"""
-              # Remove trailing commas
+              """Fix broken JSON and parse stringified objects"""
               cleaned = re.sub(r',(\s*[\]}])', r'\1', raw_text)
-              # Remove invisible characters and flatten
               cleaned = cleaned.replace('\n', '').replace('\t', '')
               try:
                   data = json.loads(cleaned)
@@ -39,7 +41,6 @@ jobs:
                   print(f"Still invalid JSON: {e}")
                   raise
 
-              # Recursively convert any stringified JSON objects
               def parse_strings(obj):
                   if isinstance(obj, dict):
                       return {k: parse_strings(v) for k, v in obj.items()}
@@ -52,24 +53,51 @@ jobs:
                               return parse_strings(json.loads(obj_strip))
                           except:
                               return obj
-                      else:
-                          return obj
+                      return obj
                   else:
                       return obj
 
               return parse_strings(data)
 
-          # Load pattern.json
+          # Load and fix pattern.json
           path = Path("pattern.json")
           raw = path.read_text(encoding="utf-8")
           data = fix_json(raw)
 
-          # Example: just print some info (replace with GitGenix logic)
           metadata = data.get("metadata", {})
           username = metadata.get("username", "unknown")
-          repository = metadata.get("repository", "unknown")
           branch = metadata.get("branch", "main")
-          print(f"Running GitGenix for {username}/{repository} on branch {branch}")
 
-          # Here you can call your GitGenix contribution generation logic
+          # Loop through all cells and create commits
+          graphs = data.get("graphs", {})
+          for year, content in graphs.items():
+              cells = content.get("cells", [])
+              for cell in cells:
+                  date = cell.get("date")
+                  intensity = cell.get("intensity", 1)
+                  isOutOfRange = cell.get("isOutOfRange", False)
+
+                  if isOutOfRange:
+                      continue  # Skip out-of-range dates
+
+                  # Create dummy file for commit
+                  filename = f"contrib_{date}.txt"
+                  Path(filename).write_text(f"Contribution intensity: {intensity}")
+
+                  # Create git commit with specific date
+                  commit_date = datetime.fromisoformat(date.replace("Z", "+00:00"))
+                  env = {
+                      "GIT_AUTHOR_DATE": commit_date.isoformat(),
+                      "GIT_COMMITTER_DATE": commit_date.isoformat()
+                  }
+                  subprocess.run(["git", "add", filename], check=True)
+                  subprocess.run(
+                      ["git", "commit", "-m", f"GitGenix contribution {date}"],
+                      check=True,
+                      env={**env, **dict(**subprocess.os.environ)}
+                  )
+
+          # Push commits to the specified branch
+          subprocess.run(["git", "push", "origin", branch], check=True)
+          print(f"Finished GitGenix contributions for {username} on branch {branch}")
           EOF

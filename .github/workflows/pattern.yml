@@ -1,0 +1,38 @@
+name: Generate GitHub Art
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Setup Git
+        run: |
+          git config user.name "TonimaDristy"
+          git config user.email "tidristy477@gmail.com"
+
+      - name: Read pattern.json and make commits
+        run: |
+          python3 - << 'EOF'
+          import json, subprocess
+
+          with open('pattern.json') as f:
+              data = json.load(f)
+
+          for entry in data:
+              date = entry["date"]
+              count = entry["count"]
+              for i in range(count):
+                  subprocess.run(["bash", "-c", f"echo '{date}' >> log.txt"])
+                  subprocess.run(["git", "add", "."])
+                  subprocess.run(["git", "commit", "--date", f"{date} 12:00:00", "-m", f"Commit on {date}"])
+          
+          EOF
+
+      - name: Push changes
+        run: git push

@@ -4,11 +4,10 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  generate:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v3
 
       - name: Set up Python
@@ -16,38 +15,61 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Setup Git
+      - name: Install dependencies
         run: |
-          git config user.name "TonimaDristy"
-          git config user.email "tidristy477@gmail.com"
+          python -m pip install --upgrade pip
+          pip install requests
 
-      - name: Read pattern.json and make commits
+      - name: Run GitGenix script
         run: |
-          python3 - << 'EOF'
-          import json, subprocess, os, sys
-          from datetime import datetime
+          python - <<'EOF'
+          import json
+          import re
+          from pathlib import Path
 
-          if not os.path.exists('pattern.json'):
-              sys.exit("ERROR: pattern.json not found in repo root")
+          def fix_json(raw_text):
+              """Automatically fix common JSON issues and parse stringified objects"""
+              # Remove trailing commas
+              cleaned = re.sub(r',(\s*[\]}])', r'\1', raw_text)
+              # Remove invisible characters and flatten
+              cleaned = cleaned.replace('\n', '').replace('\t', '')
+              try:
+                  data = json.loads(cleaned)
+              except json.JSONDecodeError as e:
+                  print(f"Still invalid JSON: {e}")
+                  raise
 
-          with open('pattern.json') as f:
-              data = json.load(f)
+              # Recursively convert any stringified JSON objects
+              def parse_strings(obj):
+                  if isinstance(obj, dict):
+                      return {k: parse_strings(v) for k, v in obj.items()}
+                  elif isinstance(obj, list):
+                      return [parse_strings(v) for v in obj]
+                  elif isinstance(obj, str):
+                      obj_strip = obj.strip()
+                      if obj_strip.startswith('{') or obj_strip.startswith('['):
+                          try:
+                              return parse_strings(json.loads(obj_strip))
+                          except:
+                              return obj
+                      else:
+                          return obj
+                  else:
+                      return obj
 
-          for entry in data:
-              # Extract date and intensity
-              date_str = entry.get("date")
-              intensity = entry.get("intensity", 0)
-              if not date_str or intensity == 0:
-                  continue
+              return parse_strings(data)
 
-              # Convert ISO date to YYYY-MM-DD
-              date = datetime.fromisoformat(date_str.replace("Z","")).strftime("%Y-%m-%d")
+          # Load pattern.json
+          path = Path("pattern.json")
+          raw = path.read_text(encoding="utf-8")
+          data = fix_json(raw)
 
-              for i in range(intensity):
-                  subprocess.run(["bash", "-c", f"echo '{date}' >> log.txt"])
-                  subprocess.run(["git", "add", "."])
-                  subprocess.run(["git", "commit", "--date", f"{date} 12:00:00", "-m", f"Commit on {date}"])
+          # Example: just print some info (replace with GitGenix logic)
+          metadata = data.get("metadata", {})
+          username = metadata.get("username", "unknown")
+          repository = metadata.get("repository", "unknown")
+          branch = metadata.get("branch", "main")
+          print(f"Running GitGenix for {username}/{repository} on branch {branch}")
+
+          # Here you can call your GitGenix contribution generation logic
           EOF
-
-      - name: Push changes
-        run: git push

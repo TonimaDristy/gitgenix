@@ -11,6 +11,11 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v3
 
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
       - name: Setup Git
         run: |
           git config user.name "TonimaDristy"
@@ -19,7 +24,10 @@ jobs:
       - name: Read pattern.json and make commits
         run: |
           python3 - << 'EOF'
-          import json, subprocess
+          import json, subprocess, os
+
+          if not os.path.exists('pattern.json'):
+              raise FileNotFoundError("pattern.json not found in repo root")
 
           with open('pattern.json') as f:
               data = json.load(f)
@@ -31,7 +39,6 @@ jobs:
                   subprocess.run(["bash", "-c", f"echo '{date}' >> log.txt"])
                   subprocess.run(["git", "add", "."])
                   subprocess.run(["git", "commit", "--date", f"{date} 12:00:00", "-m", f"Commit on {date}"])
-          
           EOF
 
       - name: Push changes
